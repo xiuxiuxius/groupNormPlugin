@@ -21,10 +21,11 @@ constexpr static int kNumClass = 80;
 constexpr static int kClsNumClass = 1000;
 
 constexpr static int kBatchSize = 1;
+constexpr static int kBatchSize_infer = 1;
 
 // Yolo's input width and height must by divisible by 32
-constexpr static int kInputH = 640;
-constexpr static int kInputW = 640;
+constexpr static int kInputH = 64;
+constexpr static int kInputW = 64;
 // [03/21/2023-11:19:31] [F] [TRT] Assertion failed: params.c % params.cPerBlock == 0 && params.hw % params.hwPerBlock == 0
 constexpr static int kChannel = 128;
 
@@ -53,5 +54,6 @@ const static float kConfThresh = 0.5f;
 const static int kGpuId = 0;
 
 // If your image size is larger than 4096 * 3112, please increase this value
-const static int kMaxInputImageSize = 4096 * 3112;
+const static int kMaxInputImageSize = 2048 * 2048;
+
 

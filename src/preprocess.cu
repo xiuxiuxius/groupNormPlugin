@@ -98,16 +98,17 @@ void cuda_preprocess(
     float* dst, int dst_width, int dst_height,
     cudaStream_t stream) {
 
-  int img_size = src_width * src_height * 3;
+  int img_size = src_width * src_height * kChannel;
+  // std::cout << sizeof(int) << " " << sizeof(float) << std::endl;
   // copy data to pinned memory
   memcpy(img_buffer_host, src, img_size);
   // std::cout << " src_width : " << src_width << std::endl;
   // std::cout << " src_height : " << src_height << std::endl;
   // std::cout << " img_size : " << img_size << std::endl;
   // copy data to device memory
-  CUDA_CHECK(cudaMemcpyAsync(img_buffer_device, img_buffer_host, img_size, cudaMemcpyHostToDevice, stream));
-
-  // return;
+  // CUDA_CHECK(cudaMemcpyAsync(img_buffer_device, img_buffer_host, img_size, cudaMemcpyHostToDevice, stream));
+  CUDA_CHECK(cudaMemcpyAsync(dst, img_buffer_host, img_size, cudaMemcpyHostToDevice, stream));
+  return;
 
   AffineMatrix s2d, d2s;
   float scale = std::min(dst_height / (float)src_height, dst_width / (float)src_width);
@@ -138,7 +139,7 @@ void cuda_preprocess(
 void cuda_batch_preprocess(std::vector<cv::Mat>& img_batch,
                            float* dst, int dst_width, int dst_height,
                            cudaStream_t stream) {
-  int dst_size = dst_width * dst_height * 3;
+  int dst_size = dst_width * dst_height * kChannel;
   for (size_t i = 0; i < img_batch.size(); i++) {
     cuda_preprocess(img_batch[i].ptr(), img_batch[i].cols, img_batch[i].rows, &dst[dst_size * i], dst_width, dst_height, stream);
     CUDA_CHECK(cudaStreamSynchronize(stream));
@@ -147,9 +148,9 @@ void cuda_batch_preprocess(std::vector<cv::Mat>& img_batch,
 
 void cuda_preprocess_init(int max_image_size) {
   // prepare input data in pinned memory
-  CUDA_CHECK(cudaMallocHost((void**)&img_buffer_host, max_image_size * 3));
+  CUDA_CHECK(cudaMallocHost((void**)&img_buffer_host, max_image_size * kChannel));
   // prepare input data in device memory
-  CUDA_CHECK(cudaMalloc((void**)&img_buffer_device, max_image_size * 3));
+  CUDA_CHECK(cudaMalloc((void**)&img_buffer_device, max_image_size * kChannel));
 }
 
 void cuda_preprocess_destroy() {
@@ -157,3 +158,62 @@ void cuda_preprocess_destroy() {
   CUDA_CHECK(cudaFreeHost(img_buffer_host));
 }
 
+static inline int32_t divUp(int32_t m, int32_t n)
+{
+    return (m + n - 1) / n;
+}
+
+
+__global__ void toNCHWKernel(cv::cuda::PtrStepSz<float3> in, float* out)
+{
+  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+  printf("x: % d, y: %d, in.cols: %d, in.rows: %d", x, y, in.cols, in.rows);
+
+  if ((x >= in.cols) || (y >= in.rows))
+      return;
+
+  float3 v = in(y, x);
+  int step = in.cols * in.rows;
+  printf("step : %d", step);
+  int idx = y * in.cols + x;
+  out[idx] = v.x;
+  out[idx + step] = v.y;
+  out[idx + 2 * step] = v.z;
+}
+
+void toNCHW(const cv::cuda::GpuMat& input, float* output,
+            cudaStream_t stream)
+{
+  std::cout << " toNCHW " << std::endl;
+  const dim3 threads(32, 8);
+  const dim3 grid(divUp(input.cols, threads.x),
+                  divUp(input.rows, threads.y));
+
+  toNCHWKernel<<<grid,threads,0,stream>>>(input, output);
+  std::cout << " toNCHW  end" << std::endl;
+}
+
+__global__ void fromNCHWKernel(const float* in, cv::cuda::PtrStepSz<float> out)
+{
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if ((x >= out.cols) || (y >= out.rows))
+        return;
+
+    int idx = y * out.cols + x;
+    float v = in[idx];
+    out(y, x) = v;
+}
+
+void fromNCHW(const float* input, cv::cuda::GpuMat& output,
+              cudaStream_t stream)
+{
+    const dim3 threads(32, 8);
+    const dim3 grid(divUp(output.cols, threads.x),
+                    divUp(output.rows, threads.y));
+
+    fromNCHWKernel<<<grid,threads,0,stream>>>(input, output);
+}

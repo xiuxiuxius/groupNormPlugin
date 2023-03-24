@@ -14,15 +14,15 @@ using namespace nvinfer1;
 
 static IPluginV2Layer* addGNLayer(INetworkDefinition *network, ITensor *input) {
 
-  auto creator = getPluginRegistry()->getPluginCreator("GroupNormalizationPlugin", "1");
+  auto creator = getPluginRegistry()->getPluginCreator("GroupNorm", "1");
 
-  std::cout << "77777777777777" << std::endl;
+  // std::cout << "77777777777777" << std::endl;
 
   // PluginField plugin_fields[1];
 
   const PluginFieldCollection* pluginData = creator->getFieldNames();
-  std::cout << "plugin_data.nbFields : " << pluginData->nbFields << std::endl;
-  std::cout << "plugin_data.fields : " << pluginData->fields << std::endl;
+  // std::cout << "plugin_data.nbFields : " << pluginData->nbFields << std::endl;
+  // std::cout << "plugin_data.fields : " << pluginData->fields << std::endl;
   // IPluginV2 *plugin_obj = creator->createPlugin("gnlayer", pluginData);
   ITensor* inputTensors[] = {input};
   // auto gn = network->addPluginV2(inputTensors, kBatchSize, *plugin_obj);
@@ -52,33 +52,33 @@ static IPluginV2Layer* addGNLayer(INetworkDefinition *network, ITensor *input) {
   // plugin_data.fields = plugin_fields;
   IPluginV2 *plugin_obj = creator->createPlugin("gnlayer", pluginData);
 
-  std::cout << "8888888888888" <<(plugin_obj==nullptr)<< std::endl;
+  // std::cout << "8888888888888" <<(plugin_obj==nullptr)<< std::endl;
 
   // std::vector<ITensor*> input_tensors;
   // input_tensors.push_back(&input);
 
   auto gn = network->addPluginV2(inputTensors, kBatchSize, *plugin_obj);
 
-  std::cout << "999999999999999" << std::endl;
+  // std::cout << "999999999999999" << std::endl;
 
   return gn;
 }
 
-ICudaEngine* build_det_engine(unsigned int maxBatchSize, IBuilder* builder, IBuilderConfig* config, DataType dt) 
+ICudaEngine* build_det_engine(unsigned int maxBatchSize, IBuilder* builder, IBuilderConfig* config,IOptimizationProfile* profile, DataType dt) 
 {
     // std::cout << " build_det_engine    begin" << std::endl;
     INetworkDefinition* network = builder->createNetworkV2(1U);
     // NetworkDefinitionCreationFlag::kEXPLICIT_BATCH
     // Create input tensor of shape {3, kInputH, kInputW}
-    ITensor* data = network->addInput(kInputTensorName, dt, Dims3{kChannel, kInputH, kInputW });
+    ITensor* data = network->addInput(kInputTensorName, dt, Dims4{-1, kChannel, kInputH, kInputW });
 
     assert(data);
 
-    std::cout << " 4444444444444444444" << std::endl;
+    // std::cout << " 4444444444444444444" << std::endl;
     
     auto gn = addGNLayer(network, data);
 
-    std::cout << " ##################" << std::endl;
+    // std::cout << " ##################" << std::endl;
     // auto ret = cudaGetLastError();
     // std::cout<< "1 : " <<cudaGetErrorString(ret)<<std::endl;
     // std::cout<< "(gn==nullptr) : " << (gn==nullptr)<<std::endl;
@@ -107,10 +107,16 @@ ICudaEngine* build_det_engine(unsigned int maxBatchSize, IBuilder* builder, IBui
     builder->setMaxBatchSize(maxBatchSize);
     config->setMaxWorkspaceSize(16 * (1 << 20));  // 16MB
     config->setFlag(BuilderFlag::kFP16); // fp16
-
+    profile->setDimensions(kInputTensorName, nvinfer1::OptProfileSelector::kMIN, Dims4{1, kChannel, kInputH, kInputW});
+    profile->setDimensions(kInputTensorName, nvinfer1::OptProfileSelector::kOPT, Dims4{std::max(1,int(kBatchSize/2)), kChannel, kInputH, kInputW});
+    profile->setDimensions(kInputTensorName, nvinfer1::OptProfileSelector::kMAX, Dims4{kBatchSize, kChannel, kInputH, kInputW});
+    config->addOptimizationProfile(profile);
     std::cout << "Building engine, please wait for a while..." << std::endl;
     ICudaEngine* engine = builder->buildEngineWithConfig(*network, *config);
-    std::cout << "Build engine successfully!" << std::endl;
+    if(engine != nullptr)
+      std::cout << "Build engine successfully!" << std::endl;
+    else
+      std::cout << "Build engine failed!" << std::endl;
     // Don't need the network any more
     network->destroy();
     return engine;
