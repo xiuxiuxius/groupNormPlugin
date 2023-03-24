@@ -106,7 +106,7 @@ private:
     static std::vector<PluginField> mPluginAttributes;
     std::string mNameSpace;
 };
-
+REGISTER_TENSORRT_PLUGIN(GroupNormPluginCreator);
 } // namespace plugin
 } // namespace nvinfer1
 

@@ -302,6 +302,7 @@ IPluginV2* GroupNormPluginCreator::createPlugin(char const* name, PluginFieldCol
     {
         float epsilon = 1e-5F;
         int32_t bSwish = 0;
+        /*
         for (int32_t i = 0; i < fc->nbFields; ++i)
         {
             if (fc->fields[i].name == std::string("epsilon"))
@@ -315,6 +316,7 @@ IPluginV2* GroupNormPluginCreator::createPlugin(char const* name, PluginFieldCol
                 continue;
             }
         }
+        */
         return new GroupNormPlugin(name, epsilon, bSwish);
     }
     catch (std::exception const& e)
@@ -350,5 +352,6 @@ char const* GroupNormPluginCreator::getPluginVersion() const noexcept
 
 PluginFieldCollection const* GroupNormPluginCreator::getFieldNames() noexcept
 {
+    std::cout << "getFieldNames() : " << std::endl;
     return &mFC;
 }

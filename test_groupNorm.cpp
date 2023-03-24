@@ -29,22 +29,40 @@ void prepare_buffers(ICudaEngine* engine, float** gpu_input_buffer, float** gpu_
   //   o_size *= odims.d[i];
   // }
   // std::cout<<"output size"<<o_size<<std::endl;
-  CUDA_CHECK(cudaMalloc((void**)gpu_input_buffer, kBatchSize * 3 * kInputH * kInputW * sizeof(float)));
+
+  auto idims = engine->getTensorShape(kInputTensorName);
+  auto odims = engine->getTensorShape(kOutputTensorName);
+
+  size_t inputLen = idims.d[1] * idims.d[2] * idims.d[3] * sizeof(float);
+  size_t outputLen = odims.d[1] * odims.d[2] * odims.d[3] * sizeof(float);
+
+  
+  // cudaMalloc(&input_data, inputLen);
+  // cudaMalloc(&output_data, outputLen);
+
+  CUDA_CHECK(cudaMalloc((void**)gpu_input_buffer, kBatchSize * kChannel * kInputH * kInputW * sizeof(float)));
   CUDA_CHECK(cudaMalloc((void**)gpu_output_buffer, kBatchSize * kOutputSize * sizeof(float)));
 
   *cpu_output_buffer = new float[kBatchSize * kOutputSize];
 }
 
 void infer(IExecutionContext& context, cudaStream_t& stream, void** gpu_buffers, float* output, int batchsize) {
+    // context.setTensorAddress(kInputTensorName, gpu_buffers[0]);
+    // context.setTensorAddress(kOutputTensorName, gpu_buffers[1]);
     // cudaSetDevice(kGpuId);
-    
     bool ret = context.enqueue(batchsize, gpu_buffers, stream, nullptr);
+    // bool ret = context.enqueueV2(gpu_buffers, stream, nullptr);
+    // cv::cuda::GpuMat input2, output2;
+
+    // toNCHW(input2, gpu_buffers[0], stream);
+    // int ret = context.enqueueV3(stream);
+    // fromNCHW(gpu_buffers[1], output2, stream);
     // std::cout << "type : "  << typeid( gpu_buffers[1] ).name() << std::endl;
     // std::cout << "******66666   : " << sizeof(gpu_buffers) <<std::endl;
     // std::cout << "******66666   : " << sizeof(gpu_buffers[0]) <<std::endl;
     // std::cout << "******66666   : " << sizeof(gpu_buffers[1]) <<std::endl;
     // assert(ret==true);
-    // std::cout << "ret:"  << ret << std::endl;
+    std::cout << "ret:  "  << ret << std::endl;
     // auto ret = cudaGetLastError();
     // CUDA_CHECK(ret)
     // std::cout<< "55 : " <<cudaGetErrorString(ret)<<std::endl;
@@ -67,6 +85,7 @@ void infer(IExecutionContext& context, cudaStream_t& stream, void** gpu_buffers,
     //     break;
     //   }
     // }
+
     CUDA_CHECK(cudaMemcpyAsync(output, gpu_buffers[1], batchsize * kOutputSize * sizeof(float), cudaMemcpyDeviceToHost, stream));
     // ret = cudaGetLastError();
     // std::cout<< "66 : " <<cudaGetErrorString(ret)<<std::endl;
@@ -115,9 +134,9 @@ void serialize_engine(unsigned int max_batchsize, std::string& engine_name) {
 
   // Close everything down
   engine->destroy();
-  builder->destroy();
   config->destroy();
-  serialized_engine->destroy();
+  builder->destroy();
+  serializ1ed_engine->destroy();
 }
 
 void deserialize_engine(std::string& engine_name, IRuntime** runtime, ICudaEngine** engine, IExecutionContext** context) {
@@ -146,9 +165,9 @@ void deserialize_engine(std::string& engine_name, IRuntime** runtime, ICudaEngin
 
 int main(int argc, char** argv) {
     cudaSetDevice(kGpuId);
-    std::string wts_name = "";
+    // std::string wts_name = "";
     std::string engine_name = "../gn.engine";
-    std::string img_dir = "../images";
+    // std::string img_dir = "../images";
 
     // std::cout << "111111111111" << std::endl;
 
@@ -161,16 +180,33 @@ int main(int argc, char** argv) {
     ICudaEngine* engine = nullptr;
     IExecutionContext* context = nullptr;
     deserialize_engine(engine_name, &runtime, &engine, &context);
-    // context->setBindingDimensions(0, Dims3{kChannel, kInputH, kInputW});
+
     cudaStream_t stream;
     CUDA_CHECK(cudaStreamCreate(&stream));
+
+    
+
+    // auto d = context->getBindingDimensions(0);
+    // size_t d_size = 1;
+    // for(int i = 0;i < d.nbDims;++ i){
+    //   std::cout << d.d[i] << std::endl;
+    //   d_size *= d.d[i];
+    // }
+    // std::cout <<" d_size : "<< d_size << std::endl;
+
+   
 
     // Init CUDA preprocessing
     cuda_preprocess_init(kMaxInputImageSize);
 
     // Prepare cpu and gpu buffers
-    float* gpu_buffers[2];
+    
     float* cpu_output_buffer = nullptr;
+
+    
+    // context->enqueueV3((void**)gpu_buffers, stream, nullptr);
+    // context->setOptimizationProfile(0);
+    // context->setBindingDimensions(0, Dims4{kBatchSize_infer, kChannel, kInputH, kInputW});
 
     // auto bindings_number = engine->getNbBindings();
     // for (int i = 0; i < bindings_number; i++)
@@ -185,22 +221,39 @@ int main(int argc, char** argv) {
     //     std::cout<< "size : " << size << std::endl;
     // }
 
+    // auto idims = engine->getTensorShape(kInputTensorName);
+    // auto odims = engine->getTensorShape(kOutputTensorName);
+    // Dims4 inputDims = { 1, idims.d[1], idims.d[2], idims.d[3] };
+    // Dims4 outputDims = { 1, odims.d[1], odims.d[2], odims.d[3] };
+    // context->setInputShape(kInputTensorName, inputDims);
+
+    // size_t inputLen = idims.d[1] * idims.d[2] * idims.d[3] * sizeof(float);
+    // size_t outputLen = odims.d[1] * odims.d[2] * odims.d[3] * sizeof(float);
+
+    // float *input_data, *output_data;
+    float* gpu_buffers[2];
+    // cudaMalloc(&gpu_buffers[0], inputLen);
+    // cudaMalloc(&gpu_buffers[1], outputLen);
+
+    // context->setTensorAddress(kInputTensorName, gpu_buffers[0]);
+    // context->setTensorAddress(kOutputTensorName, gpu_buffers[1]);
     prepare_buffers(engine, &gpu_buffers[0], &gpu_buffers[1], &cpu_output_buffer);
 
     // CUDA_CHECK(cudaMemcpy(cpu_output_buffer, gpu_buffers[1], kOutputSize*sizeof(float), cudaMemcpyDeviceToHost);)
 
     // std::cout<<"addr1"<<cpu_output_buffer<<std::endl;
     // Read images from directory
-    std::vector<std::string> file_names{"bus.jpg", "zidane.jpg"};
-    if (read_files_in_dir(img_dir.c_str(), file_names) < 0) {
-        std::cerr << "read_files_in_dir failed." << std::endl;
-        return -1;
-    }
+    // std::vector<std::string> file_names{"bus.jpg", "zidane.jpg"};
+    // if (read_files_in_dir(img_dir.c_str(), file_names) < 0) {
+    //     std::cerr << "read_files_in_dir failed." << std::endl;
+    //     return -1;
+    // }
 
     // batch predict
     std::vector<cv::Mat> img_batch;
-    cv::Mat img = cv::imread(img_dir + "/" + file_names[0]);
-    img_batch.push_back(img);
+    // std::vector<cv::cuda::GpuMat> img_batch;
+    // cv::Mat img = cv::imread(img_dir + "/" + file_names[0]);
+    // img_batch.push_back(img);
     // // cv::Mat img = cv::Mat(kInputH, kInputW, CV_8UC3);
     // int sizeN[kChannel];
     // for(int i = 0; i < kChannel;i ++) sizeN[i] = kInputH * kInputW;
@@ -212,40 +265,43 @@ int main(int argc, char** argv) {
     // // cv::Mat img(kChannel, kInputH, kInputW, CV_8UC1, cv::Scalar(0)); )
     // // cv::randu(img, cv::Scalar::all(0), cv::Scalar::all(255));
     //自定义数据类型
-    // typedef cv::Vec<float, kChannel> Vec32f;
+    
+    typedef cv::Vec<float, kChannel> Vec32f;
     //生成一个2x3x5的Mat，数据为double型
-    // cv::Mat img = cv::Mat::zeros(kInputH, kInputW, CV_32FC(kChannel));                                             
-    // std::cout << "channel = " << img.channels() << std::endl;
-    // for (int i = 0; i < img.rows; i++)
-    // {
-    //     for (int j = 0; j < img.cols; j++)
-    //     {
-    //         for (int c = 0; c < img.channels(); c++)
-    //         {
-    //             //给M的每一个元素赋值                
-    //             img.at<Vec32f>(i, j)[c] = c / 255.0f;              
-    //         }
-    //     }
-    // }
+    cv::Mat img = cv::Mat::zeros(kInputH, kInputW, CV_32FC(kChannel));  
+    // cv::cuda::GpuMat img = cv::cuda::GpuMat(kInputH, kInputW, CV_32FC(kChannel), cv::Scalar());                           
+    std::cout << "channel = " << img.channels() << std::endl;
+    std::cout << "img.isContinuous() = " << img.isContinuous() << std::endl;
+    std::cout <<  "typeid(img).name() : " << typeid(img).name() << std::endl;
+    for (int i = 0; i < img.rows; i++)
+    {
+        for (int j = 0; j < img.cols; j++)
+        {
+            for (int c = 0; c < img.channels(); c++)
+            {
+                //给M的每一个元素赋值                
+                img.at<Vec32f>(i, j)[c] = c / 255.0f;              
+            }
+        }
+    }
     // std::cout << img << std::endl;
+    img_batch.push_back(img);
 
-    // img_batch.push_back(img);
+    {
+      std::ofstream cpp_input;
+      cpp_input.open("./img.txt");
 
-    // {
-    //   std::ofstream cpp_input;
-    //   cpp_input.open("./img.txt");
-
-    //   for (int i = 0; i < img.rows; i++)
-    //   {
-    //       for (int j = 0; j < img.cols; j++)
-    //       {
-    //           for (int c = 0; c < img.channels(); c++)
-    //           { 
-    //               cpp_input << img.at<Vec32f>(i, j)[c] << ",";           
-    //           }
-    //       }
-    //       cpp_input << "\n";
-    //   }
+      for (int i = 0; i < img.rows; i++)
+      {
+          for (int j = 0; j < img.cols; j++)
+          {
+              for (int c = 0; c < img.channels(); c++)
+              { 
+                  cpp_input << img.at<Vec32f>(i, j)[c] << ",";           
+              }
+          }
+          cpp_input << "\n";
+      }
     //   // for(int k = 0;k < kInputH;k ++)
     //   // {
     //   //     // 每一行图像的指针
@@ -260,8 +316,8 @@ int main(int argc, char** argv) {
     //   //     }
     //   //     cpp_input << "\n";
     //   // }
-    //   cpp_input.close();
-    // }
+      cpp_input.close();
+    }
     
     
     // Preprocess
@@ -276,7 +332,7 @@ int main(int argc, char** argv) {
     std::cout << "&&&&&&&&&&&&&&&&&" <<std::endl;
     // Run inference
     auto start = std::chrono::system_clock::now();
-    infer(*context, stream, (void**)gpu_buffers, cpu_output_buffer, kBatchSize);
+    infer(*context, stream, (void**)gpu_buffers, cpu_output_buffer, kBatchSize_infer);
     auto end = std::chrono::system_clock::now();
     std::cout << "inference time: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
 
